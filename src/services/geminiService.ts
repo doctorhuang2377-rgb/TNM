@@ -1,8 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let ai: GoogleGenAI | null | undefined;
+
+function getAiClient() {
+  if (ai !== undefined) return ai;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+  return ai;
+}
 
 export async function analyzeStaging(type: 'lung' | 'esophageal' | 'thymic', data: any) {
+  const client = getAiClient();
+  if (!client) return "AI 分析未配置（缺少 VITE_GEMINI_API_KEY）。网页版本将禁用该功能。";
   const prompt = `你是一位胸外科专家。请根据以下患者录入的 TNM 临床参数，给出 ${type} 癌症的临床分期建议（基于最新 AJCC 第八版分期指南）。
 
 患者 TNM 数据：
@@ -17,18 +26,19 @@ ${JSON.stringify(data, null, 2)}
 请使用结构清晰、医学专业的中文回答。`;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await client.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
     });
     return response.text;
   } catch (error) {
-    console.error("Gemini analysis error:", error);
     return "抱歉，分析暂时不可用。请务必咨询专业医生。";
   }
 }
 
 export async function extractParamsFromReport(config: any, text?: string, images?: { data: string, mimeType: string }[]) {
+  const client = getAiClient();
+  if (!client) return null;
   const parts: any[] = [];
   
   const prompt = `你是一位极其专业的胸外专科医师。你的任务是从提供的报告中提取 TNM 分期参数。
@@ -67,7 +77,7 @@ export async function extractParamsFromReport(config: any, text?: string, images
   }
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await client.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: { parts },
       config: { responseMimeType: "application/json" }
@@ -75,7 +85,6 @@ export async function extractParamsFromReport(config: any, text?: string, images
 
     return JSON.parse(response.text || '{}');
   } catch (error) {
-    console.error("Extraction error:", error);
     return null;
   }
 }
