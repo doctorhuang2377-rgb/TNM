@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Activity, BookOpen, ChevronRight, Menu, X, HeartPulse, BrainCircuit } from 'lucide-react';
 import Home from './views/Home';
