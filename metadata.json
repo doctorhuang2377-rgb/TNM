@@ -1,0 +1,6 @@
+{
+  "name": "胸外智分 - 肺/食管/胸腺癌 TNM 分期辅助系统",
+  "description": "基于 TNM 国际标准的胸部肿瘤分期计算与决策辅助系统，支持肺癌、食管癌及胸腺肿瘤。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
