@@ -13,9 +13,15 @@ type StageResult = {
 
 function pickPrefix(value: unknown, prefixes: string[]) {
   if (typeof value !== 'string') return null;
-  const s = value.trim();
+  const toHalfWidth = (input: string) =>
+    input
+      .replace(/\u3000/g, ' ')
+      .replace(/[\uff01-\uff5e]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+
+  const s = toHalfWidth(value).trim().toUpperCase();
   for (const p of prefixes) {
-    if (s.startsWith(p)) return p;
+    const pp = toHalfWidth(p).trim().toUpperCase();
+    if (s.startsWith(pp)) return p;
   }
   return null;
 }

@@ -73,6 +73,15 @@ export default function Staging() {
   };
 
   const submitStaging = async () => {
+    const missingIndex = allParams.findIndex(p => {
+      const v = answers[p.id];
+      return v === undefined || v === '';
+    });
+    if (missingIndex !== -1) {
+      setStep(missingIndex);
+      alert('分期需要补全 T/N/M 参数后才能计算。已自动跳转到缺失项。');
+      return;
+    }
     setIsAnalyzing(true);
     const r = runStagingAgent(currentType as any, answers);
     const summary = formatStagingReport(currentType as any, r);
