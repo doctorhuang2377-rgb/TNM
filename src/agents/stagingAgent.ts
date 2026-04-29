@@ -181,21 +181,34 @@ function thymicStage(T: string | undefined, N: string | undefined, M: string | u
   return 'III';
 }
 
+type StageGroup = '0' | 'I' | 'II' | 'III' | 'IV' | null;
+
+function getStageGroup(stage: string): StageGroup {
+  const s = stage.trim().toUpperCase();
+  if (s === '0') return '0';
+  if (s.startsWith('IV')) return 'IV';
+  if (s.startsWith('III')) return 'III';
+  if (s.startsWith('II')) return 'II';
+  if (s.startsWith('I')) return 'I';
+  return null;
+}
+
 function stageToTreatment(type: CancerType, stage: string) {
+  const group = getStageGroup(stage);
   const lines: string[] = [];
   if (type === 'lung') {
-    if (stage.startsWith('0') || stage.startsWith('I') || stage.startsWith('II')) {
+    if (group === '0' || group === 'I' || group === 'II') {
       lines.push('优先评估可切除性：以根治性手术为主，结合病理/分子分型决定是否辅助治疗。');
       lines.push('术前分期完善：增强胸部CT/或PET-CT、脑MRI（按风险）、纵隔淋巴结评估。');
-      if (stage.startsWith('II')) lines.push('多学科评估：术后辅助化疗/放疗/靶向/免疫根据风险与指南选择。');
+      if (group === 'II') lines.push('多学科评估：术后辅助化疗/放疗/靶向/免疫根据风险与指南选择。');
       return lines;
     }
-    if (stage.startsWith('III')) {
+    if (group === 'III') {
       lines.push('多学科综合治疗为主：同步/序贯放化疗±免疫巩固，或新辅助后手术（严格筛选）。');
       lines.push('建议完善纵隔分期（EBUS/纵隔镜）与远处转移筛查。');
       return lines;
     }
-    if (stage.startsWith('IV')) {
+    if (group === 'IV') {
       lines.push('全身治疗为主：根据驱动基因/PD-L1选择靶向、免疫联合化疗等。');
       lines.push('少数寡转移可考虑局部治疗（放疗/消融/手术）联合系统治疗（需MDT）。');
       return lines;
@@ -203,17 +216,17 @@ function stageToTreatment(type: CancerType, stage: string) {
   }
 
   if (type === 'esophageal') {
-    if (stage === 'I') {
+    if (group === 'I') {
       lines.push('早期可考虑内镜治疗或手术（需结合病理分化、浸润深度、淋巴结风险）。');
       lines.push('建议完善EUS/增强CT/PET-CT（按条件）评估分期。');
       return lines;
     }
-    if (stage === 'II' || stage === 'III') {
+    if (group === 'II' || group === 'III') {
       lines.push('以新辅助放化疗/化疗后手术为常见策略（需MDT与体能评估）。');
       lines.push('术后根据病理分期与疗效决定辅助治疗/随访计划。');
       return lines;
     }
-    if (stage === 'IVA' || stage === 'IVB') {
+    if (group === 'IV') {
       lines.push('以系统治疗与姑息/转化治疗为主：化疗±免疫/靶向（按分子标志物）。');
       lines.push('吞咽困难可考虑支架/放疗/营养支持。');
       return lines;
@@ -221,15 +234,15 @@ function stageToTreatment(type: CancerType, stage: string) {
   }
 
   if (type === 'thymic') {
-    if (stage === 'I' || stage === 'II') {
+    if (group === 'I' || group === 'II') {
       lines.push('以完整切除手术为主，术后是否放疗取决于分期、切缘、病理类型与复发风险。');
       return lines;
     }
-    if (stage === 'IIIA' || stage === 'IIIB') {
+    if (group === 'III') {
       lines.push('以MDT为核心：新辅助/辅助治疗（放疗/化疗）联合手术（可切除者）或根治放化疗。');
       return lines;
     }
-    if (stage === 'IVA' || stage === 'IVB') {
+    if (group === 'IV') {
       lines.push('以系统治疗为主：化疗±放疗/局部治疗（按病灶分布与症状）。');
       lines.push('胸膜/心包播散可考虑减瘤手术+局部/系统治疗（需严格筛选）。');
       return lines;
@@ -239,10 +252,11 @@ function stageToTreatment(type: CancerType, stage: string) {
 }
 
 function stageToPrognosis(stage: string) {
-  if (stage.startsWith('0') || stage.startsWith('I')) return ['总体预后相对较好，关键在于早期根治与规范随访。'];
-  if (stage.startsWith('II')) return ['预后中等，取决于切除完整性、淋巴结状态与辅助治疗依从性。'];
-  if (stage.startsWith('III')) return ['预后相对较差，治疗通常需要多学科综合方案，疗效差异较大。'];
-  if (stage.startsWith('IV')) return ['以长期控制与延长生存为目标，疗效与分子分型、治疗反应密切相关。'];
+  const group = getStageGroup(stage);
+  if (group === '0' || group === 'I') return ['总体预后相对较好，关键在于早期根治与规范随访。'];
+  if (group === 'II') return ['预后中等，取决于切除完整性、淋巴结状态与辅助治疗依从性。'];
+  if (group === 'III') return ['预后相对较差，治疗通常需要多学科综合方案，疗效差异较大。'];
+  if (group === 'IV') return ['预后通常较差，以延长生存与改善生活质量为目标，疗效与分子分型、治疗反应密切相关。'];
   return ['需结合个体情况综合评估预后。'];
 }
 
