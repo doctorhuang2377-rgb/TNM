@@ -105,12 +105,23 @@ export async function extractParamsFromReport(config: any, text?: string, images
   try {
     const response = await client.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: { parts },
+      contents: [{ role: "user", parts }],
       config: { responseMimeType: "application/json" }
     });
 
-    return JSON.parse(response.text || '{}');
+    const raw = response.text || '';
+    try {
+      return JSON.parse(raw || '{}');
+    } catch {
+      return { error: '模型返回的不是合法 JSON', raw };
+    }
   } catch (error) {
-    return null;
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : JSON.stringify(error);
+    return { error: message };
   }
 }

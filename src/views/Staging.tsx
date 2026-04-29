@@ -93,17 +93,59 @@ export default function Staging() {
     localStorage.removeItem(`draft_${currentType}`);
   };
 
+  const compressImage = (file: File) => {
+    return new Promise<{ data: string; mimeType: string }>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('读取图片失败'));
+      reader.onload = () => {
+        const dataUrl = String(reader.result || '');
+        const img = new Image();
+        img.onerror = () => reject(new Error('图片解码失败（可能是不支持的格式，例如 HEIC）'));
+        img.onload = () => {
+          const maxSide = 1280;
+          const w = img.width || 1;
+          const h = img.height || 1;
+          const scale = Math.min(1, maxSide / Math.max(w, h));
+          const tw = Math.max(1, Math.round(w * scale));
+          const th = Math.max(1, Math.round(h * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = tw;
+          canvas.height = th;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('无法处理图片'));
+          ctx.drawImage(img, 0, 0, tw, th);
+          const out = canvas.toDataURL('image/jpeg', 0.82);
+          const base64 = out.split(',')[1] || '';
+          resolve({ data: base64, mimeType: 'image/jpeg' });
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-
-    Array.from(files).forEach((file: File) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        setReportImages(prev => [...prev, { data: base64, mimeType: file.type }]);
-      };
-      reader.readAsDataURL(file);
+    const list = Array.from(files);
+    const remaining = Math.max(0, 6 - reportImages.length);
+    const selected = list.slice(0, remaining);
+    if (selected.length < list.length) {
+      alert('最多支持 6 张截图。请分批识别，或优先上传关键页面。');
+    }
+    Promise.allSettled(selected.map(compressImage)).then(results => {
+      const ok = results
+        .filter((r): r is PromiseFulfilledResult<{ data: string; mimeType: string }> => r.status === 'fulfilled')
+        .map(r => r.value);
+      const failed = results
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map(r => r.reason?.message || String(r.reason));
+      if (failed.length) {
+        alert(`部分图片处理失败：\n${failed.join('\n')}`);
+      }
+      if (ok.length) {
+        setReportImages(prev => [...prev, ...ok]);
+      }
     });
   };
 
@@ -119,7 +161,9 @@ export default function Staging() {
     if (!reportText && reportImages.length === 0) return;
     setIsExtracting(true);
     const extracted = await extractParamsFromReport(config, reportText, reportImages);
-    if (extracted && extracted.extractedAnswers) {
+    if (extracted && extracted.error) {
+      alert(`智能提取失败：${extracted.error}`);
+    } else if (extracted && extracted.extractedAnswers) {
       setAnswers(extracted.extractedAnswers);
       setExtractionResult(extracted);
     } else {
