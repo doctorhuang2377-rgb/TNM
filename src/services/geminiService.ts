@@ -15,13 +15,21 @@ export function getStoredGeminiApiKey() {
 
 export function setStoredGeminiApiKey(apiKey: string) {
   const v = apiKey.trim();
-  localStorage.setItem(STORAGE_KEY, v);
-  ai = v ? new GoogleGenAI({ apiKey: v }) : null;
+  try {
+    localStorage.setItem(STORAGE_KEY, v);
+    ai = v ? new GoogleGenAI({ apiKey: v }) : null;
+  } catch {
+    throw new Error('无法保存 API Key（浏览器禁用了本地存储或处于隐私模式）');
+  }
 }
 
 export function clearStoredGeminiApiKey() {
-  localStorage.removeItem(STORAGE_KEY);
-  ai = null;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    ai = null;
+  } catch {
+    throw new Error('无法清除 API Key（浏览器禁用了本地存储或处于隐私模式）');
+  }
 }
 
 export function hasGeminiApiKey() {

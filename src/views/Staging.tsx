@@ -346,8 +346,13 @@ export default function Staging() {
                     onClick={() => {
                       const v = apiKeyDraft.trim();
                       if (!v) return;
-                      setStoredGeminiApiKey(v);
-                      alert('已保存 API Key。');
+                      try {
+                        setStoredGeminiApiKey(v);
+                        alert('已保存 API Key。');
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : String(e);
+                        alert(msg);
+                      }
                     }}
                     className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-colors"
                   >
@@ -355,9 +360,14 @@ export default function Staging() {
                   </button>
                   <button
                     onClick={() => {
-                      clearStoredGeminiApiKey();
-                      setApiKeyDraft('');
-                      alert('已清除 API Key。');
+                      try {
+                        clearStoredGeminiApiKey();
+                        setApiKeyDraft('');
+                        alert('已清除 API Key。');
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : String(e);
+                        alert(msg);
+                      }
                     }}
                     className="px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition-colors"
                   >
