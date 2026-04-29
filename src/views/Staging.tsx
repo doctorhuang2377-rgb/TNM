@@ -32,6 +32,7 @@ export default function Staging() {
   const [reportImages, setReportImages] = useState<{data: string, mimeType: string}[]>([]);
   const [extractionResult, setExtractionResult] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const answersRef = useRef<Record<string, any>>(answers);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -49,6 +50,10 @@ export default function Staging() {
   }, [answers, currentType]);
 
   useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  useEffect(() => {
     localStorage.setItem('staging_history', JSON.stringify(history));
   }, [history]);
 
@@ -61,7 +66,11 @@ export default function Staging() {
   const progress = ((step + 1) / allParams.length) * 100;
 
   const handleAnswer = (paramId: string, val: any) => {
-    setAnswers(prev => ({ ...prev, [paramId]: val }));
+    setAnswers(prev => {
+      const next = { ...prev, [paramId]: val };
+      answersRef.current = next;
+      return next;
+    });
   };
 
   const handleNext = () => {
@@ -74,7 +83,7 @@ export default function Staging() {
 
   const submitStaging = async () => {
     const missingIndex = allParams.findIndex(p => {
-      const v = answers[p.id];
+      const v = answersRef.current[p.id];
       return v === undefined || v === '';
     });
     if (missingIndex !== -1) {
@@ -83,13 +92,14 @@ export default function Staging() {
       return;
     }
     setIsAnalyzing(true);
-    const r = runStagingAgent(currentType as any, answers);
+    const finalAnswers = answersRef.current;
+    const r = runStagingAgent(currentType as any, finalAnswers);
     const summary = formatStagingReport(currentType as any, r);
     setResult(summary);
     setHistory(prev => [{
       id: Date.now(),
       type: currentType,
-      answers: { ...answers },
+      answers: { ...finalAnswers },
       result: summary,
       date: new Date().toLocaleString()
     }, ...prev].slice(0, 10));
