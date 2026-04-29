@@ -6,6 +6,14 @@ type StageResult = {
   stage: string;
   tnm: { T?: string; N?: string; M?: string };
   notes: string[];
+  analysis: {
+    qualityScore: number;
+    qualityLevel: '高' | '中' | '低';
+    confidence: number;
+    flags: string[];
+    nextSteps: string[];
+    mdtFocus: string[];
+  };
   interpretation: string[];
   treatment: string[];
   prognosis: string[];
@@ -260,6 +268,88 @@ function stageToPrognosis(stage: string) {
   return ['需结合个体情况综合评估预后。'];
 }
 
+function clamp01(x: number) {
+  if (!Number.isFinite(x)) return 0;
+  if (x < 0) return 0;
+  if (x > 1) return 1;
+  return x;
+}
+
+function buildAnalysis(type: CancerType, answers: StagingAnswers, tnm: { T?: string; N?: string; M?: string }, stage: string, notes: string[]) {
+  const flags: string[] = [];
+  const nextSteps: string[] = [];
+  const mdtFocus: string[] = [];
+
+  const requiredIds: Record<CancerType, string[]> = {
+    lung: ['t_invasion', 'n_status', 'm_status'],
+    esophageal: ['t_invasion', 'n_count', 'm_status'],
+    thymic: ['t_invasion', 'n_status', 'm_status'],
+  };
+  const optionalButImportant: Record<CancerType, string[]> = {
+    lung: ['t_size'],
+    esophageal: [],
+    thymic: [],
+  };
+
+  const missingRequired = requiredIds[type].filter(id => answers[id] === undefined || answers[id] === '');
+  const missingImportant = optionalButImportant[type].filter(id => answers[id] === undefined || answers[id] === '');
+
+  let score = 100;
+  if (missingRequired.length) score -= 50;
+  score -= Math.min(30, missingImportant.length * 15);
+  score -= Math.min(20, notes.length * 4);
+  if (score < 0) score = 0;
+
+  const qualityLevel: '高' | '中' | '低' = score >= 80 ? '高' : score >= 55 ? '中' : '低';
+  const confidence = Number((0.35 + 0.6 * clamp01(score / 100)).toFixed(2));
+
+  if (tnm.M && tnm.M !== 'M0') flags.push('提示存在远处转移（M1），总体属于晚期策略评估范围。');
+  if (tnm.N === 'N2' || tnm.N === 'N3') flags.push('提示纵隔/锁骨上等高级别淋巴结受累风险（N2/N3），建议MDT与病理/取材证据核对。');
+  if (type === 'lung') {
+    const size = parseNumber(answers.t_size);
+    if (size && size >= 5) flags.push('肿瘤体积较大（≥5cm），分期与可切除性评估更依赖影像与纵隔分期。');
+    if (typeof answers.t_invasion === 'string' && answers.t_invasion.includes('纵隔器官')) flags.push('提示纵隔重要结构侵犯可能，需重点评估切除边界与可切除性。');
+  }
+  if (type === 'esophageal') {
+    flags.push('食管癌临床分期受肿瘤部位、分化程度等影响；当前为TNM简化分组，需结合完整病理与影像复核。');
+  }
+  if (type === 'thymic') {
+    flags.push('胸腺肿瘤建议结合影像分期与病理类型评估（胸腺瘤/胸腺癌差异较大）。');
+  }
+
+  const group = getStageGroup(stage);
+  if (type === 'lung') {
+    nextSteps.push('完善影像分期：增强胸部CT（必要时PET-CT）±脑MRI（按风险）。');
+    nextSteps.push('纵隔淋巴结分期：优先考虑EBUS/EUS取材或纵隔镜（按条件）。');
+    if (group === 'IV') nextSteps.push('分子分型与免疫标志物：驱动基因与PD-L1（用于系统治疗决策参考）。');
+  }
+  if (type === 'esophageal') {
+    nextSteps.push('局部分期：EUS评估浸润深度与局部淋巴结（按条件）。');
+    nextSteps.push('全身分期：增强CT/或PET-CT（按条件）排查远处转移。');
+    if (group === 'IV') nextSteps.push('营养评估与吞咽困难处理方案同步制定（营养支持/支架/放疗等需MDT）。');
+  }
+  if (type === 'thymic') {
+    nextSteps.push('评估胸膜/心包播散与邻近结构侵犯：增强CT±MRI（按条件）。');
+    nextSteps.push('如有相关症状，考虑合并重症肌无力等自身免疫评估（按临床需要）。');
+  }
+
+  if (type === 'lung') {
+    mdtFocus.push('病理类型与分子分型是否齐全（决定靶向/免疫路径）。');
+    mdtFocus.push('N分期是否有病理证据（影像可疑与病理证实需区分）。');
+    mdtFocus.push('是否寡转移/可局部治疗的亚型（影响局部联合策略）。');
+  }
+  if (type === 'esophageal') {
+    mdtFocus.push('肿瘤部位、分化程度、HER2/PD-L1等标志物（如适用）对方案选择的影响。');
+    mdtFocus.push('可切除性与围手术期风险评估（心肺功能、营养状态）。');
+  }
+  if (type === 'thymic') {
+    mdtFocus.push('病理类型（胸腺瘤/胸腺癌）与切除完整性预期。');
+    mdtFocus.push('是否需要新辅助/辅助放化疗与照射靶区设计（按MDT）。');
+  }
+
+  return { qualityScore: score, qualityLevel, confidence, flags, nextSteps, mdtFocus };
+}
+
 export function runStagingAgent(type: CancerType, answers: StagingAnswers): StageResult {
   const notes: string[] = [];
   let tnm: { T?: string; N?: string; M?: string } = {};
@@ -296,10 +386,11 @@ export function runStagingAgent(type: CancerType, answers: StagingAnswers): Stag
   if (tnm.M) interpretation.push(`M：${tnm.M}`);
   if (!interpretation.length) interpretation.push('未能识别到完整 TNM 参数。');
 
+  const analysis = buildAnalysis(type, answers, tnm, stage, notes);
   const treatment = stageToTreatment(type, stage);
   const prognosis = stageToPrognosis(stage);
 
-  return { stage, tnm, notes, interpretation, treatment, prognosis };
+  return { stage, tnm, notes, analysis, interpretation, treatment, prognosis };
 }
 
 export function formatStagingReport(type: CancerType, r: StageResult) {
@@ -321,10 +412,26 @@ export function formatStagingReport(type: CancerType, r: StageResult) {
     for (const n of r.notes) lines.push(`- ${n}`);
   }
   lines.push('');
-  lines.push('3. 治疗方案（概览，需MDT结合指南）：');
+  lines.push('3. 多维度智能分析：');
+  lines.push(`- 数据质量：${r.analysis.qualityLevel}（评分 ${r.analysis.qualityScore}/100）`);
+  lines.push(`- 置信度：${r.analysis.confidence}`);
+  if (r.analysis.flags.length) {
+    lines.push('- 风险/要点：');
+    for (const f of r.analysis.flags) lines.push(`  - ${f}`);
+  }
+  if (r.analysis.nextSteps.length) {
+    lines.push('- 建议补充评估：');
+    for (const s of r.analysis.nextSteps) lines.push(`  - ${s}`);
+  }
+  if (r.analysis.mdtFocus.length) {
+    lines.push('- MDT 讨论聚焦：');
+    for (const s of r.analysis.mdtFocus) lines.push(`  - ${s}`);
+  }
+  lines.push('');
+  lines.push('4. 治疗方案（概览，需MDT结合指南）：');
   for (const t of r.treatment) lines.push(`- ${t}`);
   lines.push('');
-  lines.push('4. 预后参考：');
+  lines.push('5. 预后参考：');
   for (const p of r.prognosis) lines.push(`- ${p}`);
   lines.push('');
   lines.push('免责声明：本系统仅提供科研参考与风险评估建议，不能替代正式医疗诊断与治疗决策。');
