@@ -3,7 +3,9 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2, FileText, Activity, Layers, Target, Upload, Camera, Sparkles, X, AlertCircle, CheckCircle2, Wifi, WifiOff, History, Save } from 'lucide-react';
 import { STAGING_CONFIG } from '../constants';
-import { analyzeStaging, extractParamsFromReport, clearStoredGeminiApiKey, getStoredGeminiApiKey, hasGeminiApiKey, setStoredGeminiApiKey } from '../services/geminiService';
+import { extractParamsFromReport, clearStoredGeminiApiKey, getStoredGeminiApiKey, hasGeminiApiKey, setStoredGeminiApiKey } from '../services/geminiService';
+import { extractFromReportText } from '../agents/reportTextExtractor';
+import { formatStagingReport, runStagingAgent } from '../agents/stagingAgent';
 
 export default function Staging() {
   const [searchParams] = useSearchParams();
@@ -71,16 +73,9 @@ export default function Staging() {
   };
 
   const submitStaging = async () => {
-    if (!isOnline) {
-      alert('检测到网络断开，分期报告由于涉及 AI 深度逻辑计算，需要联网环境。您的参数已保存，网络恢复后将自动同步。');
-      return;
-    }
-    if (!hasGeminiApiKey()) {
-      setResult('未配置 Gemini API Key，无法生成 AI 分期报告。请在左侧面板保存 Key 后再试。');
-      return;
-    }
     setIsAnalyzing(true);
-    const summary = await analyzeStaging(currentType as any, answers);
+    const r = runStagingAgent(currentType as any, answers);
+    const summary = formatStagingReport(currentType as any, r);
     setResult(summary);
     setHistory(prev => [{
       id: Date.now(),
@@ -151,23 +146,41 @@ export default function Staging() {
 
   const runExtraction = async () => {
     if (!isOnline) {
-      alert('AI 自动识别需要连网访问。请恢复网络后再试。');
-      return;
-    }
-    if (!hasGeminiApiKey()) {
-      alert('未配置 Gemini API Key，无法智能提取报告截图。请先在左侧面板保存 Key。');
-      return;
+      if (!reportText) {
+        alert('离线模式下仅支持“粘贴报告文字内容”的本地提取；截图识别需要联网与 API Key。');
+        return;
+      }
     }
     if (!reportText && reportImages.length === 0) return;
     setIsExtracting(true);
-    const extracted = await extractParamsFromReport(config, reportText, reportImages);
-    if (extracted && extracted.error) {
-      alert(`智能提取失败：${extracted.error}`);
-    } else if (extracted && extracted.extractedAnswers) {
-      setAnswers(extracted.extractedAnswers);
-      setExtractionResult(extracted);
-    } else {
-      alert('无法智能提取报告截图。请确认截图清晰、内容完整，或改为粘贴文本后再试。');
+
+    let merged: any = null;
+
+    if (reportText) {
+      const local = extractFromReportText(currentType as any, reportText);
+      if (!('error' in local)) {
+        merged = local;
+        setAnswers(prev => ({ ...prev, ...local.extractedAnswers }));
+        setExtractionResult(local);
+      }
+    }
+
+    const canUseAi = isOnline && hasGeminiApiKey() && reportImages.length > 0;
+    if (canUseAi) {
+      const extracted = await extractParamsFromReport(config, reportText, reportImages);
+      if (extracted && extracted.error) {
+        alert(`截图智能提取失败：${extracted.error}`);
+      } else if (extracted && extracted.extractedAnswers) {
+        merged = extracted;
+        setAnswers(prev => ({ ...prev, ...extracted.extractedAnswers }));
+        setExtractionResult(extracted);
+      }
+    } else if (reportImages.length > 0 && !hasGeminiApiKey()) {
+      alert('已做本地文字提取；截图识别需要联网且配置 Gemini API Key。');
+    }
+
+    if (!merged) {
+      alert('无法智能提取。建议：粘贴包含 T/N/M 的文字（如 T2N1M0），或上传更清晰截图并配置 Key。');
     }
     setIsExtracting(false);
   };
