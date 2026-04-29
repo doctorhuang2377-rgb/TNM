@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2, FileText, Activity, Layers, Target, Upload, Camera, Sparkles, X, AlertCircle, CheckCircle2, Wifi, WifiOff, History, Save } from 'lucide-react';
 import { STAGING_CONFIG } from '../constants';
-import { analyzeStaging, extractParamsFromReport } from '../services/geminiService';
+import { analyzeStaging, extractParamsFromReport, clearStoredGeminiApiKey, getStoredGeminiApiKey, hasGeminiApiKey, setStoredGeminiApiKey } from '../services/geminiService';
 
 export default function Staging() {
   const [searchParams] = useSearchParams();
@@ -23,6 +23,7 @@ export default function Staging() {
     return saved ? JSON.parse(saved) : [];
   });
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [apiKeyDraft, setApiKeyDraft] = useState(() => getStoredGeminiApiKey() || '');
   
   // Extraction state
   const [reportText, setReportText] = useState('');
@@ -74,6 +75,10 @@ export default function Staging() {
       alert('检测到网络断开，分期报告由于涉及 AI 深度逻辑计算，需要联网环境。您的参数已保存，网络恢复后将自动同步。');
       return;
     }
+    if (!hasGeminiApiKey()) {
+      setResult('未配置 Gemini API Key，无法生成 AI 分期报告。请在左侧面板保存 Key 后再试。');
+      return;
+    }
     setIsAnalyzing(true);
     const summary = await analyzeStaging(currentType as any, answers);
     setResult(summary);
@@ -107,12 +112,18 @@ export default function Staging() {
       alert('AI 自动识别需要连网访问。请恢复网络后再试。');
       return;
     }
+    if (!hasGeminiApiKey()) {
+      alert('未配置 Gemini API Key，无法智能提取报告截图。请先在左侧面板保存 Key。');
+      return;
+    }
     if (!reportText && reportImages.length === 0) return;
     setIsExtracting(true);
     const extracted = await extractParamsFromReport(config, reportText, reportImages);
     if (extracted && extracted.extractedAnswers) {
       setAnswers(extracted.extractedAnswers);
       setExtractionResult(extracted);
+    } else {
+      alert('无法智能提取报告截图。请确认截图清晰、内容完整，或改为粘贴文本后再试。');
     }
     setIsExtracting(false);
   };
@@ -240,6 +251,45 @@ export default function Staging() {
             </div>
             
             <div className="space-y-4">
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-600">Gemini API Key</span>
+                  <span className={`text-[10px] font-bold ${hasGeminiApiKey() ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {hasGeminiApiKey() ? '已配置' : '未配置'}
+                  </span>
+                </div>
+                <input
+                  type="password"
+                  placeholder="粘贴你的 Gemini API Key（仅保存在本机浏览器）"
+                  value={apiKeyDraft}
+                  onChange={(e) => setApiKeyDraft(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-sm"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const v = apiKeyDraft.trim();
+                      if (!v) return;
+                      setStoredGeminiApiKey(v);
+                      alert('已保存 API Key。');
+                    }}
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-colors"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearStoredGeminiApiKey();
+                      setApiKeyDraft('');
+                      alert('已清除 API Key。');
+                    }}
+                    className="px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition-colors"
+                  >
+                    清除
+                  </button>
+                </div>
+              </div>
+
               <div 
                 onClick={() => isOnline && fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer group ${

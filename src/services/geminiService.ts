@@ -2,16 +2,42 @@ import { GoogleGenAI } from "@google/genai";
 
 let ai: GoogleGenAI | null | undefined;
 
+const STORAGE_KEY = 'gemini_api_key';
+
+export function getStoredGeminiApiKey() {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredGeminiApiKey(apiKey: string) {
+  const v = apiKey.trim();
+  localStorage.setItem(STORAGE_KEY, v);
+  ai = v ? new GoogleGenAI({ apiKey: v }) : null;
+}
+
+export function clearStoredGeminiApiKey() {
+  localStorage.removeItem(STORAGE_KEY);
+  ai = null;
+}
+
+export function hasGeminiApiKey() {
+  return Boolean(getStoredGeminiApiKey() || import.meta.env.VITE_GEMINI_API_KEY);
+}
+
 function getAiClient() {
   if (ai !== undefined) return ai;
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = getStoredGeminiApiKey() || import.meta.env.VITE_GEMINI_API_KEY;
   ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
   return ai;
 }
 
 export async function analyzeStaging(type: 'lung' | 'esophageal' | 'thymic', data: any) {
   const client = getAiClient();
-  if (!client) return "AI 分析未配置（缺少 VITE_GEMINI_API_KEY）。网页版本将禁用该功能。";
+  if (!client) return "未配置 Gemini API Key，无法生成 AI 分期报告。请在页面内保存 Key 后再试。";
   const prompt = `你是一位胸外科专家。请根据以下患者录入的 TNM 临床参数，给出 ${type} 癌症的临床分期建议（基于最新 AJCC 第八版分期指南）。
 
 患者 TNM 数据：
