@@ -253,17 +253,21 @@ export function runStagingAgent(type: CancerType, answers: StagingAnswers): Stag
     tnm = { T, N, M };
     stage = lungStage(T, N, M);
     if (!size) notes.push('未录入原发肿瘤大小，T 分期按侵犯范围/最小值估计，建议补全。');
+    if (!M) notes.push('未识别到 M 分期（远处转移）。请在表单中选择 M0/M1a/M1b/M1c，或在报告文本里包含 M0/M1a/M1b/M1c 等字样。');
+    if (!N) notes.push('未识别到 N 分期（淋巴结）。请在表单中选择 N0-N3，或在报告文本里包含 N0-N3 等字样。');
   }
 
   if (type === 'esophageal') {
     tnm = esophagealTNM(answers);
     stage = esophagealStage(tnm.T, tnm.N, tnm.M);
     notes.push('食管癌 AJCC8 分期受分化程度、肿瘤部位等影响较大；此处为基于 TNM 的简化分组，需结合病理与MDT复核。');
+    if (!tnm.M) notes.push('未识别到 M 分期（远处转移）。请在表单中选择 M0/M1，或在报告文本里包含 M0/M1。');
   }
 
   if (type === 'thymic') {
     tnm = thymicTNM(answers);
     stage = thymicStage(tnm.T, tnm.N, tnm.M);
+    if (!tnm.M) notes.push('未识别到 M 分期（远处转移）。请在表单中选择 M0/M1a/M1b，或在报告文本里包含 M0/M1a/M1b。');
   }
 
   const interpretation: string[] = [];
